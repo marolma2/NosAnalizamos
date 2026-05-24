@@ -11,6 +11,8 @@ library(pacman)
 library(readr)
 library(ggplot2)
 library(tidyverse)
+library(knitr)
+library(GGally)
 ```
 
 ```{r}
@@ -21,4 +23,256 @@ datos <- datos_og %>%
   filter(!is.na(Id), Id != "martsobm")
 head(datos)
 ```
+
+```{r}
+asignaturas <- c("ALG", "ANM", "FP", "DCS", "MD")
+datos_calif <- datos %>%
+  mutate(across(all_of(asignaturas), ~ {
+    x <- str_replace_all(as.character(.x), ",", ".")
+    x <- if_else(x == "NC", "3", x)
+    x_num <- as.numeric(x)
+x_num
+}))
+
+notas_save <- datos_calif %>% select(Id, all_of(asignaturas))
+save(notas_save, file = "Notas.Rdata")
+```
+```{r}
+anio <- 2022
+tabla_estadisticos <- datos_calif %>%
+  select(all_of(asignaturas)) %>%
+  pivot_longer(cols = everything(), names_to = "Asignatura", values_to = "Nota") %>%
+  group_by(Asignatura) %>%
+  summarise(
+    Minimo      = min(Nota, na.rm = TRUE),
+    Percentil25 = quantile(Nota, 0.25, na.rm = TRUE),
+    Mediana     = median(Nota, na.rm = TRUE),
+    Media       = mean(Nota, na.rm = TRUE),
+    Desv_Tipica = sd(Nota, na.rm = TRUE),
+    Percentil75 = quantile(Nota, 0.75, na.rm = TRUE),
+    Maximo      = max(Nota, na.rm = TRUE)
+  ) %>%
+  mutate(across(where(is.numeric), ~ round(., 2)))
+
+kable(tabla_estadisticos, caption = paste("Estadísticos de calificaciones - Curso", anio))
+
+```
+
+```{r}
+ggpairs(datos_calif, columns = asignaturas, 
+        title = "Matriz de Relaciones entre Asignaturas (Curso 2022)") +
+  theme_minimal()
+
+```
+
+```{r}
+datos_matriz <- datos_calif %>% 
+  select(all_of(asignaturas)) %>% 
+  drop_na()
+
+round(cov(datos_matriz), 2)
+
+round(cor(datos_matriz, method = "pearson"), 2)
+
+round(cor(datos_matriz, method = "spearman"), 2)
+```
+
+```{r}
+datos_long_graficos <- datos_calif %>% 
+  select(Id, Sex, all_of(asignaturas)) %>% 
+  pivot_longer(cols = all_of(asignaturas), names_to = "Asignatura", values_to = "Nota")
+
+ggplot(datos_long_graficos, aes(x = Asignatura, y = Nota)) +
+  geom_boxplot(fill = "powderblue", color = "darkblue", outlier.color = "red") +
+  labs(title = "Distribución de Calificaciones por Asignatura (2022)",
+       x = "Asignatura", y = "Calificación Numérica") +
+  theme_minimal()
+
+ggplot(datos_long_graficos %>% filter(!is.na(Sex)), aes(x = Asignatura, y = Nota, fill = Sex)) +
+  geom_boxplot(outlier.color = "red") +
+  labs(title = "Distribución de Calificaciones por Asignatura y Sexo (2022)",
+       x = "Asignatura", y = "Calificación Numérica") +
+  scale_fill_brewer(palette = "Set2") +
+  theme_minimal()
+```
+
+```{r}
+alumnos_completos <- datos_calif %>% 
+  drop_na(all_of(asignaturas)) %>% 
+  select(Id, all_of(asignaturas)) %>% 
+  pivot_longer(cols = all_of(asignaturas), names_to = "Asignatura", values_to = "Nota")
+
+ggplot(alumnos_completos, aes(x = Id, y = Nota, group = Asignatura, color = Asignatura)) +
+  geom_line(size = 0.6) +
+  geom_point(size = 2) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1, size = 8)) +
+  labs(title = "Perfil de Calificaciones de Alumnos con Evaluación Completa (2022)",
+       x = "Usuario del Alumno (Id)", 
+       y = "Calificación")
+```
+
+
+```{r}
+datos_2026_og <- read_tsv("data/NosAutoanalizamos2026 - NosAutoanalizamos (1).tsv", skip = 28, show_col_types = FALSE)
+
+datos_2026 <- datos_2026_og %>%
+  filter(!is.na(Id), Id != "martsobm")
+
+datos_2026_calif <- datos_2026 %>%
+  mutate(across(all_of(asignaturas), ~ {
+    x <- str_replace_all(as.character(.x), ",", ".")
+    x <- if_else(x == "NC", "3", x)
+    x_num <- as.numeric(x)
+    x_num
+  }))
+
+datos_2026_clean <- datos_2026_calif %>%
+  mutate(Sex = case_when(
+    Sex %in% c("F", "Femenino", "f") ~ "F",
+    Sex %in% c("M", "Masculino", "m") ~ "M",
+    TRUE ~ NA_character_
+  ))
+
+datos_2026_clean <- datos_2026_clean %>%
+  mutate(NW.Hnd = case_when(
+    str_detect(tolower(NW.Hnd), "der") ~ "Derecha",
+    str_detect(tolower(NW.Hnd), "izq") ~ "Izquierda",
+    TRUE ~ NA_character_
+  ))
+
+datos_2026_clean <- datos_2026_clean %>%
+  mutate(Smoke = case_when(
+    str_detect(tolower(Smoke), "si") ~ "Si",
+    str_detect(tolower(Smoke), "no") ~ "No",
+    TRUE ~ NA_character_
+  ))
+
+datos_2026_clean <- datos_2026_clean %>%
+  mutate(
+    Height = as.numeric(str_replace_all(as.character(Height), ",", ".")),
+    Wr.Hnd = as.numeric(str_replace_all(as.character(Wr.Hnd), ",", ".")),
+    Pulse  = as.numeric(str_replace_all(as.character(Pulse), ",", ".")),
+    Hwork  = as.numeric(str_replace_all(as.character(Hwork), ",", "."))
+  )
+```
+
+1.¿Qué edad, expresada en años (con decimales) tiene el alumno más joven a fecha 01/02/2026.
+```{r}
+datos_2026_clean <- datos_2026_clean %>%
+  mutate(
+    Fecha_Formateada = str_replace_all(`FechaNac(DD-MM-YYY)`, "/", "-"),
+    Fecha_Nacimiento = as.Date(Fecha_Formateada, format = "%d-%m-%Y"),
+    Edad_Calculada   = as.numeric(difftime(as.Date("2026-02-01"), Fecha_Nacimiento, units = "days")) / 365
+  )
+
+edad_min <- min(datos_2026_clean$Edad_Calculada, na.rm = TRUE)
+edad_min
+#La edad minima es 18,13425
+```
+
+2.Cuántos alumnos simultanean trabajo y estudios.
+```{r}
+num_simultanean <- datos_2026_clean %>% 
+  filter(!is.na(Hwork), Hwork > 0) %>% 
+  nrow()
+num_simultanean
+#14 alumnos
+```
+
+
+3.Hay más hombres o más mujeres fumadoras.
+
+```{r}
+tabla_fuma <- table(datos_2026_clean$Sex, datos_2026_clean$Smoke)
+tabla_fuma
+#hay más hombres fumadores
+```
+
+
+4.Cuál es el valor medio y la varianza de la variable Wr.Hnd según el sexo.
+
+```{r}
+datos_2026_clean %>%
+  filter(!is.na(Sex)) %>%
+  group_by(Sex) %>%
+  summarise(
+    Media_Palmo = mean(Wr.Hnd, na.rm = TRUE),
+    Varianza_Palmo = var(Wr.Hnd, na.rm = TRUE)
+  ) %>%
+  kable(digits = 2, caption = "Tamaño de la mano según el Sexo (2026)")
+```
+
+
+5.Determina si existe relación entre el sexo y la mano con la que se escribe  (NW.Hnd)
+
+```{r}
+tabla_relacion <- table(datos_2026_clean$Sex, datos_2026_clean$NW.Hnd)
+test_independencia <- chisq.test(tabla_relacion)
+tabla_relacion
+test_independencia
+#no existe una relación estadísticamente significativa entre el sexo del alumno y la mano con la que escribe
+```
+
+
+6.Existe una relación lineal entre la altura (Height) y la distancia del extremo del meñique al extremo del pulgar de la mano con la que escribimos (Wr.Hnd)
+
+```{r}
+r_pearson <- cor(datos_2026_clean$Height, datos_2026_clean$Wr.Hnd, use = "complete.obs", method = "pearson")
+r_pearson
+#Existe una relación lineal directa positiva
+```
+
+
+7.El identificador de Hampel detecta algún outlier en la variable altura.
+
+```{r}
+mediana_alt <- median(datos_2026_clean$Height, na.rm = TRUE)
+mad_alt     <- mad(datos_2026_clean$Height, na.rm = TRUE)
+
+limite_inferior <- mediana_alt - 3 * mad_alt
+limite_superior <- mediana_alt + 3 * mad_alt
+
+atipicos_hampel <- datos_2026_clean %>%
+  filter(Height < limite_inferior | Height > limite_superior) %>%
+  select(Id, Height)
+
+atipicos_hampel
+```
+
+
+8.Considera la asignatura FP. Si queremos realizar una imputación generalizada usando la media, ¿qué valor deberíamos utilizar ?
+
+```{r}
+media_fp_total <- mean(datos_2026_clean$FP, na.rm = TRUE)
+media_fp_total
+#4.4
+```
+
+
+9.Define una nueva variable (PulseCat) a partir del ritmo cardíaco (Pulse), con dos valores PulseH, si Pulse>=65 y PulseL si Pulse<65. ¿Qué valores utilizarías para imputar los valores faltantes de las notas de FP, dependiendo del valor de PulseCat (imputación por casos similares)
+
+```{r}
+datos_2026_clean <- datos_2026_clean %>%
+  mutate(PulseCat = if_else(Pulse >= 65, "PulseH", "PulseL"))
+
+datos_2026_clean %>%
+  filter(!is.na(PulseCat)) %>%
+  group_by(PulseCat) %>%
+  summarise(Media_FP_Similares = mean(FP, na.rm = TRUE)) %>%
+  kable(digits = 2, caption = "Medias condicionadas de FP por categoría de pulso")
+```
+
+
+10.¿Qué podemos decir, como científicos de datos, ante esta frase referida a nuestros datos ? "El ritmo cardíaco está ligado con la cantidad de sangre que llega al cerebro, por tanto existirá una relación lineal directa esta esta variable y las calificaciones obtenidas en ALG"
+
+```{r}
+cor_alg_ritmo <- cor(datos_2026_clean$ALG, datos_2026_clean$Pulse, use = "complete.obs")
+cor_alg_ritmo
+#Es falso ya que asume que un mecanismo fisiológico se traduce en una proporcionalidad matemática en el desempeño académico.
+```
+
+
+
+
 

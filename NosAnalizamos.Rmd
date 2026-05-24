@@ -1,0 +1,24 @@
+---
+title: "NosAnalizamos"
+author: "Manuel Maestre Roldán"
+output: html_document
+date: "2026-05-24"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(pacman)
+library(readr)
+library(ggplot2)
+library(tidyverse)
+```
+
+```{r}
+datos_og <- read_tsv("data/NosAutoanalizamos2022 - Hoja1.tsv", skip = 25)
+
+# Filtrar para tener solo filas con datos de alumnos y eliminar a 'martsobm'
+datos <- datos_og %>%
+  filter(!is.na(Id), Id != "martsobm")
+head(datos)
+```
+
